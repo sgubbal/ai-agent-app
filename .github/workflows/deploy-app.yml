@@ -1,0 +1,31 @@
+name: Deploy App
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'lambda/**'
+      - 'cloudformation/**'
+      - 'scripts/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        required: true
+        default: dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Build / Upload / Deploy
+        run: |
+          chmod +x scripts/build_upload_deploy.sh
+          ./scripts/build_upload_deploy.sh ${{ github.event.inputs.environment }}
