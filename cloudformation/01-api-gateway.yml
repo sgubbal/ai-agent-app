@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: API Gateway for AI Agent app
+
+Parameters:
+  Environment:
+    Type: String
+  LambdaFunctionArn:
+    Type: String
+
+Resources:
+  Api:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub ai-agent-api-${Environment}
+      EndpointConfiguration: { Types: [REGIONAL] }
+
+  RootResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref Api
+      ParentId: !GetAtt Api.RootResourceId
+      PathPart: chat
+
+  PostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref Api
+      ResourceId: !Ref RootResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}/invocations
+
+  Deploy:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: PostMethod
+    Properties:
+      RestApiId: !Ref Api
+      StageName: !Ref Environment
+
+  Permission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+Outputs:
+  ApiUrl:
+    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/chat

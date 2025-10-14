@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Master stack for app; expects imports from bootstrap/infra
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+
+Resources:
+  LambdaStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3.amazonaws.com/${ArtifactBucket}/cloudformation/00-lambda.yml
+      Parameters:
+        Environment: !Ref Environment
+        ArtifactBucket: !Ref ArtifactBucket
+        AppBucket: !Ref AppBucket
+        KmsKeyArn: !Ref KmsKeyArn
+        VpcId: !Ref VpcId
+        PrivateSubnetIds: !Ref PrivateSubnetIds
+
+  ApiStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3.amazonaws.com/${ArtifactBucket}/cloudformation/01-api-gateway.yml
+      Parameters:
+        Environment: !Ref Environment
+        LambdaFunctionArn: !GetAtt LambdaStack.Outputs.LambdaFunctionArn

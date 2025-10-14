@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda and execution role for AI Agent app
+
+Parameters:
+  Environment:
+    Type: String
+  ArtifactBucket:
+    Type: String
+  AppBucket:
+    Type: String
+  KmsKeyArn:
+    Type: String
+  VpcId:
+    Type: String
+  PrivateSubnetIds:
+    Type: String
+
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ai-agent-lambda-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: LambdaAppPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:aws:s3:::${AppBucket}/*
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !Ref KmsKeyArn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: "*"
+
+  AgentLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ai-agent-app-${Environment}
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaRole.Arn
+      Runtime: python3.12
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Sub lambda/${Environment}/lambda.zip
+      Timeout: 30
+      MemorySize: 512
+      VpcConfig:
+        SubnetIds: !Split [",", !Ref PrivateSubnetIds]
+        SecurityGroupIds: [] # Could add specific SG imported from infra
+      KmsKeyArn: !Ref KmsKeyArn
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          APP_BUCKET: !Ref AppBucket
+
+Outputs:
+  LambdaFunctionName:
+    Value: !Ref AgentLambda
+  LambdaFunctionArn:
+    Value: !GetAtt AgentLambda.Arn
